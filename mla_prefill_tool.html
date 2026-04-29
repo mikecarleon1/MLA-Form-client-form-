@@ -1,0 +1,1374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>MLA Transfer — Paste note, open form</title>
+  <style>
+    :root {
+      --bg: #0f1419;
+      --panel: #1a2332;
+      --text: #e7eef7;
+      --muted: #8fa3b8;
+      --accent: #3d8fd1;
+      --accent-hover: #5aa7e0;
+      --ok: #3d9e6a;
+      --warn: #c9a227;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: system-ui, Segoe UI, Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      margin: 0;
+      min-height: 100vh;
+      line-height: 1.45;
+    }
+    .wrap { max-width: 720px; margin: 0 auto; padding: 1.25rem 1rem 2rem; }
+    h1 { font-size: 1.35rem; font-weight: 600; margin: 0 0 0.35rem; }
+    .sub { color: var(--muted); font-size: 0.92rem; margin-bottom: 1rem; }
+    label { display: block; font-size: 0.85rem; color: var(--muted); margin-bottom: 0.35rem; }
+    textarea {
+      width: 100%;
+      min-height: 220px;
+      padding: 0.75rem 0.85rem;
+      border: 1px solid #2a3a50;
+      border-radius: 8px;
+      background: var(--panel);
+      color: var(--text);
+      font-size: 0.95rem;
+      resize: vertical;
+    }
+    textarea:focus {
+      outline: 2px solid var(--accent);
+      outline-offset: 1px;
+    }
+    .row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.6rem;
+      margin-top: 0.85rem;
+      align-items: center;
+    }
+    button {
+      cursor: pointer;
+      border: none;
+      border-radius: 8px;
+      padding: 0.55rem 1rem;
+      font-size: 0.95rem;
+      font-weight: 600;
+    }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-primary:hover { background: var(--accent-hover); }
+    .btn-secondary { background: #2a3f55; color: var(--text); }
+    .btn-secondary:hover { background: #355a78; }
+    .btn-safe { background: var(--ok); color: #fff; }
+    .hint { font-size: 0.82rem; color: var(--muted); margin-top: 0.75rem; }
+    .warn { color: var(--warn); font-size: 0.85rem; margin-top: 0.5rem; }
+    details {
+      margin-top: 1rem;
+      background: var(--panel);
+      border-radius: 8px;
+      border: 1px solid #2a3a50;
+      padding: 0.5rem 0.85rem;
+    }
+    summary { cursor: pointer; color: var(--muted); font-size: 0.9rem; }
+    pre {
+      margin: 0.5rem 0 0;
+      font-size: 0.78rem;
+      white-space: pre-wrap;
+      word-break: break-all;
+      color: #b8c9d9;
+      max-height: 200px;
+      overflow: auto;
+    }
+    #urlOut {
+      width: 100%;
+      margin-top: 0.5rem;
+      font-size: 0.75rem;
+      padding: 0.4rem;
+      background: #0c1016;
+      border: 1px solid #2a3a50;
+      border-radius: 6px;
+      color: #9ab;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>MLA Transfer form — quick fill</h1>
+    <p class="sub">Paste the whole call note below, then click a button. Your browser opens the Google Form with fields filled in. Always check before you submit.</p>
+    <p class="sub">For messy or unusual notes, use the <strong>AI + few-shot</strong> path on your PC: <code>python scripts/mla_form_llm_prefill.py yournote.txt --open</code> (needs <code>openai</code> and <code>OPENAI_API_KEY</code>). Add real examples to <code>scripts/mla_few_shot_examples.json</code> so it learns your formats. To bulk-check parsing without opening the form, run <code>python scripts/test_mla_prefill_regression.py</code> or use <strong>Regression tests</strong> below.</p>
+
+    <label for="note">Agent note (one lead)</label>
+    <textarea id="note" placeholder="Paste phone, name, address, card lines, etc."></textarea>
+
+    <div class="row">
+      <button type="button" class="btn-primary" id="btnOpen">Open prefilled form</button>
+      <button type="button" class="btn-safe" id="btnOpenSafe">Open without payment fields</button>
+      <button type="button" class="btn-secondary" id="btnCopy">Copy link</button>
+      <button type="button" class="btn-secondary" id="btnCheck">Check fields only</button>
+    </div>
+    <p class="warn">Payment details in a link can sit in browser history. On shared PCs, prefer “without payment” and type card or bank on the form.</p>
+    <p class="hint">If nothing opens, your browser blocked the pop-up — use Copy link and paste into the address bar, or allow pop-ups for this file.</p>
+
+    <input type="text" id="urlOut" readonly placeholder="Generated link appears here" />
+
+    <details id="detailsReview">
+      <summary>Review parsed fields</summary>
+      <pre id="review"></pre>
+    </details>
+
+    <details id="detailsRegression" style="margin-top: 0.75rem">
+      <summary>Regression tests (same JSON as Python — no form submit)</summary>
+      <p class="hint" style="margin-top: 0.5rem">
+        Choose <code>scripts/mla_few_shot_examples.json</code> (or a copy). Assertions use only keys listed in each example
+        <code>fields</code> object. From a terminal you can run
+        <code>python scripts/test_mla_prefill_regression.py</code> for the same checks.
+      </p>
+      <div class="row" style="margin-top: 0.5rem">
+        <input type="file" id="regressionFile" accept=".json,application/json" style="font-size: 0.85rem; max-width: 100%" />
+        <button type="button" class="btn-secondary" id="btnRegression">Run JSON tests</button>
+      </div>
+      <pre id="regressionOut" style="margin-top: 0.5rem; max-height: 280px"></pre>
+    </details>
+  </div>
+
+  <script>
+(function () {
+  const FORM_BASE = "https://docs.google.com/forms/d/e/1FAIpQLSePxpEhm3MDlMydeTCYN-sYCSVy6ukey508rxFIsy70EybAzA/viewform";
+
+  const ENTRY_IDS = {
+    phone_number: 935477316,
+    device: 1384845588,
+    first_name: 498512694,
+    last_name: 275495688,
+    date_of_birth: 1461002841,
+    address: 1842946664,
+    city: 5982582,
+    state: 450869036,
+    zip_code: 1614604753,
+    emergency_first: 382157456,
+    emergency_last: 1122804287,
+    emergency_phone: 1302115296,
+    emergency_relation: 538297232,
+    payment_method: 806946184,
+    card_type: 572824001,
+    exp_date: 2125077144,
+    cvv: 1448083221,
+    card_number: 1262838055,
+    bank_account_type: 1923918739,
+    bank_name: 192443813,
+    routing_number: 2077900982,
+    account_number: 1352212579,
+    billing_date: 425911382,
+    first_time_device: 50511349,
+    service_active: 1358154759,
+    current_company: 1677007562,
+    center_name: 636820014,
+    comments: 2142178029,
+  };
+
+  const DEVICE_SMARTWATCH = "Smartwatch $44.95$";
+  const DEVICE_NECKLACE = "Necklace $39.95";
+  const CENTER_NAME = "HS";
+  const DEFAULT_COMPANY = "NA";
+
+  const PAYMENT_BANK_CARD = "Bank card";
+  const PAYMENT_BANK_ACCOUNT = "Bank account";
+  const CARD_TYPE_VISA = "Visa";
+  const CARD_TYPE_MASTER = "Master";
+  const CARD_TYPE_AMEX = "American express";
+  const CARD_TYPE_DISCOVER = "discover";
+  const CARD_TYPE_BANK_LABEL = "Bank Account";
+  const BANK_CHECKING = "Checking account";
+  const BANK_SAVING = "Saving account";
+  const BANK_OTHER = "Other";
+  const SERVICE_NO_ACTIVE = "No active service";
+  const SERVICE_YES = "Yes";
+
+  const PRIOR_PATTERNS = [
+    /\bone\s+before\b/i,
+    /\bhas\s+one\b/i,
+    /\bgot\s+one\b/i,
+    /\bhad\s+(?:one|it|a\s+device|a\s+necklace|before)\b/i,
+    /\bold\s+one\b/i,
+    /\breceived\s+(?:a\s+)?(?:necklace|device|one|before)\b/i,
+    /\brecieved\b/i,
+    /\bnecklace\s+before\b/i,
+    /\bprevious\b/i,
+    /\bprior\b/i,
+    /\breplacement\b/i,
+    /\bmedical\s+guardian\b/i,
+  ];
+
+  function normWs(s) {
+    return (s || "").trim().replace(/\s+/g, " ");
+  }
+
+  function digitsOnly(s) {
+    return (s || "").replace(/\D/g, "");
+  }
+
+  function splitCombinedName(full) {
+    const s = normWs(full);
+    if (!s) return ["", "", ""];
+    const parts = s.split(/\s+/);
+    if (parts.length === 1) return [parts[0], "", ""];
+    if (parts.length === 2) return [parts[0], "", parts[1]];
+    const first = parts[0];
+    const last = parts[parts.length - 1];
+    const middle = parts.slice(1, -1).join(" ");
+    let mi = "";
+    if (middle.length === 1) mi = middle;
+    else if (middle.split(/\s+/)[0]) mi = middle.split(/\s+/)[0].slice(0, 1);
+    return [first, mi, last];
+  }
+
+  function firstNameForForm(full) {
+    const [first, mi, last] = splitCombinedName(full);
+    const firstOut = mi ? first + " " + mi : first;
+    return [normWs(firstOut), last];
+  }
+
+  function normalizeDevice(note) {
+    const raw = (note || "").replace(/\u00a0/g, " ");
+    const t = raw.toLowerCase();
+    if (/\bsmart[\s-]*watch\s*[:$]?/i.test(raw) || t.includes("smartwatch"))
+      return DEVICE_SMARTWATCH;
+    if (t.includes("necklace") || t.includes("neclace") || t.includes("necklase"))
+      return DEVICE_NECKLACE;
+    if (t.includes("44.95")) return DEVICE_SMARTWATCH;
+    if (t.includes("39.95")) return DEVICE_NECKLACE;
+    return DEVICE_NECKLACE;
+  }
+
+  function hadPriorDevice(note) {
+    const t = note || "";
+    return PRIOR_PATTERNS.some((re) => re.test(t));
+  }
+
+  function firstTimeYesNo(note) {
+    return hadPriorDevice(note) ? "No" : "Yes";
+  }
+
+  function currentCompany(note) {
+    const m = (note || "").match(
+      /(?:company|carrier|provider|with)\s*[:#]?\s*([A-Za-z][A-Za-z\s&'.-]{1,40})/i
+    );
+    return m ? normWs(m[1]) : DEFAULT_COMPANY;
+  }
+
+  function extractDigitSequences(text) {
+    return (text || "").match(/\d{4,}/g) || [];
+  }
+
+  function collapseDigitSeparators(text) {
+    const out = [];
+    for (const line of (text || "").split(/\r?\n/)) {
+      if (/\b\d{1,2}\s+\d{1,2}\s+\d{4}\b/.test(line)) out.push(line);
+      else out.push(line.replace(/(?<=\d)[ -]+(?=\d)/g, ""));
+    }
+    return out.join("\n");
+  }
+
+  function findPanFromDashedGroups(text) {
+    const lines = (text || "").split(/\r?\n/);
+    for (const line of lines) {
+      if (/\bCVV\b|\bCVC\b/i.test(line)) continue;
+      if (!line.includes("-") && !/\d{4}\s+\d{4}/.test(line)) continue;
+      const parts = line.trim().split(/[\s-]+/);
+      const digitParts = parts.filter((p) => /^\d+$/.test(p));
+      if (digitParts.length < 2) continue;
+      const pan = digitParts.join("");
+      if (pan.length >= 15 && pan.length <= 19) return pan;
+    }
+    return "";
+  }
+
+  function classifyRoutingAccount(seqs) {
+    const list = [...seqs];
+    let routing = "";
+    let account = "";
+    const nines = list.filter((s) => s.length === 9);
+    if (nines.length >= 1) routing = nines[0];
+
+    const nonPan = list.filter((s) => !(s.length >= 15 && s.length <= 19));
+    for (const s of nonPan) {
+      if (s.length === 9 && s === routing) continue;
+      if (s.length >= 4 && (!account || s.length >= account.length)) account = s;
+    }
+    if (routing && !account) {
+      for (const s of list) {
+        if (s !== routing && s.length >= 4 && s.length !== 9) {
+          account = s;
+          break;
+        }
+      }
+    }
+    return [routing, account];
+  }
+
+  function pickPreferredPhone(text, phones) {
+    if (!phones.length) return "";
+    let m = (text || "").match(
+      /\b(\d{10})\s*(?:\/\/|\/)\s*(?:cell|mobile|phone|pn|cellphone|landline)\b/i
+    );
+    if (m) {
+      const d = digitsOnly(m[1]);
+      if (phones.includes(d)) return d;
+    }
+    m = (text || "").match(
+      /(?:cell|mobile|phone|pn|cellphone|landline)\s*[:#]?\s*(\d{10})\b/i
+    );
+    if (m) {
+      const d = digitsOnly(m[1]);
+      if (phones.includes(d)) return d;
+    }
+    return phones[0];
+  }
+
+  function findPhones(text) {
+    let scrubbed = text || "";
+    const longs = scrubbed.match(/\d{15,22}/g) || [];
+    for (const longD of longs) {
+      scrubbed = scrubbed.replace(longD, " ".repeat(longD.length));
+    }
+    const out = [];
+    const re = /(?:\+1[-.\s]?)?(?:\(?\d{3}\)?[-.\s]?)?\d{3}[-.\s]?\d{4}\b/g;
+    let m;
+    while ((m = re.exec(scrubbed))) {
+      let d = digitsOnly(m[0]);
+      if (d.length === 11 && d.startsWith("1")) d = d.slice(1);
+      if (d.length === 10) out.push(d);
+    }
+    const seen = new Set();
+    return out.filter((p) => (seen.has(p) ? false : (seen.add(p), true)));
+  }
+
+  function pushDate(out, mm, dd, yyRaw) {
+    const mi = parseInt(mm, 10);
+    const di = parseInt(dd, 10);
+    if (Number.isNaN(mi) || Number.isNaN(di) || mi < 1 || mi > 12 || di < 1 || di > 31)
+      return;
+    let yy = String(yyRaw).trim();
+    if (yy.length === 2) {
+      const y = parseInt(yy, 10);
+      yy = String(y < 50 ? 2000 + y : 1900 + y);
+    }
+    if (yy.length !== 4) return;
+    const yfull = parseInt(yy, 10);
+    if (Number.isNaN(yfull) || yfull < 1900 || yfull > 2035) return;
+    const s =
+      String(mi).padStart(2, "0") + "/" + String(di).padStart(2, "0") + "/" + yy;
+    if (!out.includes(s)) out.push(s);
+  }
+
+  function findDates(text) {
+    const out = [];
+    const t = text || "";
+    let m;
+    const re1 = /\b(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})\b/g;
+    while ((m = re1.exec(t))) pushDate(out, m[1], m[2], m[3]);
+    const re2 = /\b(\d{1,2})\s+(\d{1,2})\s+(\d{4})\b/g;
+    while ((m = re2.exec(t))) pushDate(out, m[1], m[2], m[3]);
+    const re3 = /\b(\d{1,2})-(\d{1,2})-(\d{4})\b/g;
+    while ((m = re3.exec(t))) pushDate(out, m[1], m[2], m[3]);
+    const re4 = /\b(\d{1,2})\s*\/\s*(\d{1,2})\s*\/\s*(\d{2,4})\b/g;
+    while ((m = re4.exec(t))) pushDate(out, m[1], m[2], m[3]);
+    return out;
+  }
+
+  function parseCardExp(t) {
+    let m = (t || "").match(
+      /(?:EXP|EXP:|EXP\s*DATE|exp|expires?|expiration\s*date)\s*[/#:]*\s*(\d{1,2})[/-](\d{2,4})/i
+    );
+    if (m) {
+      const a = m[1];
+      const b = m[2];
+      if (b.length === 2) return String(parseInt(a, 10)).padStart(2, "0") + "/" + b;
+      if (b.length === 4) return String(parseInt(a, 10)).padStart(2, "0") + "/" + b.slice(2);
+    }
+    m = (t || "").match(
+      /(?:visa|master(?:card)?|discover|\bdebit\b|\bcredit\b)[^\n]{0,120}?\b(\d{1,2})\s*\/\s*(\d{2})\s*[-–]\s*\d{3,4}\s*[-–]\s*\d{15,19}/is
+    );
+    if (m) return String(parseInt(m[1], 10)).padStart(2, "0") + "/" + m[2];
+    m = (t || "").match(/\b(\d{1,2})[/-](\d{2})\b(?!\s*\d{4})/);
+    if (m) return String(parseInt(m[1], 10)).padStart(2, "0") + "/" + m[2];
+    return "";
+  }
+
+  function parseCvv(t) {
+    const raw = t || "";
+    const m = raw.match(/(?:CVV|CVC)\s*[/#:]*\s*(\d{3,4})\b/i);
+    if (m) return m[1];
+    const mHyp = raw.match(
+      /\b(\d{1,2})\s*\/\s*(\d{2,4})\s*[-–]\s*(\d{3,4})\s*[-–]\s*(\d{15,19})\b/
+    );
+    if (mHyp) return mHyp[3];
+    const m2 = raw.match(
+      /^\s*\d{1,2}\s*\/\s*\d{2,4}\s*\n\s*(\d{3})\s*\n\s*(?:\d{4}\s+){3}\d{4}/im
+    );
+    if (m2) return m2[1];
+    const m2b = raw.match(
+      /(?:master|visa|discover|\bamex\b|american\s+express)\b[^\n]*\n\s*(\d{1,2}\s*\/\s*\d{2,4})\s*\n\s*(\d{3,4})\b/im
+    );
+    if (m2b) return m2b[2];
+    const m3 = raw.match(
+      /^\s*\d{1,2}\s*\/\s*\d{2,4}\s*\n\s*(\d{3,4})\s*\n(?!\s*(?:\d{4}\s+){2,}\d{4})/im
+    );
+    return m3 ? m3[1] : "";
+  }
+
+  function parseBillingDate(t) {
+    const raw = t || "";
+    const scrub = raw
+      .replace(/\$?\d+\.\d{1,2}(?:\s*\/\s*(?:month|mo\.?))?/gi, " ")
+      .replace(/\b\d{1,2}\/\d{1,2}\/\d{2,4}\b/g, " ");
+    function dayOk(s) {
+      const d = parseInt(s, 10);
+      return !Number.isNaN(d) && d >= 1 && d <= 31;
+    }
+    let m = raw.match(
+      /(?:BILLING\s*DATE|billing\s*date|bill\s*date)\s*[/#:]*\s*(.+?)(?:\n|$)/i
+    );
+    if (m) {
+      let chunk = normWs(m[1]).replace(/\$?\d+\.\d{2}.*$/, "").trim();
+      let mday = chunk.match(/\b(?:the\s+)?(\d{1,2})(?:ST|ND|RD|TH)?\b(?!\s*[/%.])/i);
+      if (mday && dayOk(mday[1])) return String(parseInt(mday[1], 10));
+      mday = chunk.match(/\b(\d{1,2})(?:ST|ND|RD|TH)\b/i);
+      if (mday && dayOk(mday[1])) return String(parseInt(mday[1], 10));
+      return "";
+    }
+    m = scrub.match(/billing\s+date\s+(?:the\s+)?(\d{1,2})(?:ST|ND|RD|TH)?\b/i);
+    if (m && dayOk(m[1])) return String(parseInt(m[1], 10));
+    m = scrub.match(
+      /\b(?:billing|bill\s*day|debited|draft)\b[^\n]{0,40}?\b(?:the\s+)?(\d{1,2})(?:ST|ND|RD|TH)?\b/i
+    );
+    if (m && dayOk(m[1])) return String(parseInt(m[1], 10));
+    if (/\b1ST\s+of\s+the\s+month\b/i.test(scrub)) return "1";
+    return "";
+  }
+
+  function maskExpCvvPanForPanScan(text) {
+    return (text || "").replace(
+      /\b(\d{1,2})\s*\/\s*(\d{2,4})\s*[-–]\s*(\d{3,4})\s*[-–]\s*(\d{15,19})\b/g,
+      "$1/$2 X $4"
+    );
+  }
+
+  function findPan(text) {
+    const t = maskExpCvvPanForPanScan(text || "");
+    const g = findPanFromDashedGroups(t);
+    if (g) return g;
+    const raw = collapseDigitSeparators(t);
+    let best = "";
+    for (const s of extractDigitSequences(raw)) {
+      if (s.length >= 15 && s.length <= 19 && s.length > best.length) best = s;
+    }
+    return best;
+  }
+
+  function inferCardType(t) {
+    const x = (t || "").toLowerCase();
+    if (/\bvisa\b|\bvise\b/.test(x)) return CARD_TYPE_VISA;
+    if (/\bmaster(?:card)?\b/.test(x)) return CARD_TYPE_MASTER;
+    if (/\bamex\b|\bamerican\s+express\b/.test(x)) return CARD_TYPE_AMEX;
+    if (/\bdiscover\b/.test(x)) return CARD_TYPE_DISCOVER;
+    return CARD_TYPE_MASTER;
+  }
+
+  function inferPaymentPath(t) {
+    const x = (t || "").toLowerCase();
+    if (/\b(bank\s+account|checking|savings|direct\s+deposit|ach\b|wire\s+transfer)\b/.test(x))
+      return PAYMENT_BANK_ACCOUNT;
+    if (x.includes("routing") && x.includes("account")) return PAYMENT_BANK_ACCOUNT;
+    if (/account\s*number/.test(x) && /routing/.test(x)) return PAYMENT_BANK_ACCOUNT;
+    if (/routing\s*number/.test(x)) return PAYMENT_BANK_ACCOUNT;
+    if (/account\s*number/.test(x) && !/\b(card|visa|master|cvv|debit\s+credit)\b/.test(x))
+      return PAYMENT_BANK_ACCOUNT;
+    if (
+      /\bchime\b|\bwells\s+fargo\b|\bboa\b|\bbank\s+of\b|\bprofile\s+bank\b|\bcheque\b|\bfederal\s+credit\b|\bcredit\s+union\b/.test(
+        x
+      )
+    )
+      return PAYMENT_BANK_ACCOUNT;
+    return PAYMENT_BANK_CARD;
+  }
+
+  function parseLabeledRouting(text) {
+    let m = (text || "").match(/routing\s*number\s*[/#:]*\s*(\d{9,11})\b/i);
+    if (!m) m = (text || "").match(/\brouting\s*[/#:]*\s*(\d{9,11})\b/i);
+    if (m) {
+      const d = m[1];
+      if (d.length >= 9) return d.slice(0, 9);
+    }
+    return "";
+  }
+
+  function parseLabeledAccount(text) {
+    const m = (text || "").match(/account\s*number\s*[/#:]*\s*([\d\s-]{6,24})/i);
+    if (m) return m[1].replace(/\D/g, "");
+    return "";
+  }
+
+  function parseBankInstitutionLine(text) {
+    const lines = (text || "")
+      .split(/\r?\n/)
+      .map((ln) => ln.trim())
+      .filter(Boolean);
+    const skipRe =
+      /routing|account\s*numb|cheque|check\s*no|cvv|exp\b|card\b|master|visa|debit|credit\s+card|smart|necklace|billing|landline|cell/i;
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      if (
+        /^(checking|savings)(\s+account)?\s*$/i.test(line) ||
+        /^profile\s+bank\s*$/i.test(line)
+      ) {
+        for (let j = i + 1; j < Math.min(i + 4, lines.length); j++) {
+          const cand = lines[j];
+          if (skipRe.test(cand) || /^\d/.test(cand)) continue;
+          if (cand.split(/\s+/).length >= 2 && /^[A-Za-z]/.test(cand)) return normWs(cand);
+        }
+      }
+    }
+    return "";
+  }
+
+  function parseBankNameFromNote(text) {
+    const lines = (text || "").split(/\r?\n/);
+    const skipCu =
+      /routing|account\s*numb|cheque|check\s*no|cvv|exp\b|card\b|master|visa|debit|credit\s+card|smart|necklace|billing|landline|cell(?:phone)?|\b\d{9}\b/i;
+    for (const rawLine of lines) {
+      const line = rawLine.trim();
+      if (line && !skipCu.test(line)) {
+        if (
+          /^[A-Za-z0-9][\w &'.-]{0,62}\s+(?:federal\s+)?credit\s+union\s*$/i.test(line)
+        ) {
+          return normWs(line);
+        }
+        const mBank = line.match(/^bank\s*[/#:]\s*(.+)$/i);
+        if (mBank) {
+          const got = normWs(mBank[1]);
+          if (got.length >= 3) return got;
+        }
+      }
+      const m = line.match(/^([A-Za-z][A-Za-z &'.-]{0,30}?)\s+bank\s*$/i);
+      if (!m) continue;
+      let base = normWs(m[1]);
+      const stripped = base.replace(/^(checking|savings?)\s+/i, "").trim();
+      if (stripped) {
+        return (
+          stripped
+            .split(/\s+/)
+            .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+            .join(" ") + " Bank"
+        );
+      }
+      if (/^(checking|savings?)$/i.test(base)) continue;
+      return (
+        base
+          .split(/\s+/)
+          .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+          .join(" ") + " Bank"
+      );
+    }
+    const m2 = (text || "").match(
+      /(?:name\s+of\s+(?:the\s+)?bank|bank\s*name|institution\s*name)\s*[/#:]*\s*(.+?)(?:\n|$)/i
+    );
+    return m2 ? normWs(m2[1]) : "";
+  }
+
+  function isPaymentOrBankLine(s) {
+    const sl = (s || "").toLowerCase();
+    return /\b(checking|savings|routing|account\s*number|chime\b|direct\s+deposit|\bach\b)\b/.test(
+      sl
+    );
+  }
+
+  function parseNameLineCandidates(lines) {
+    let picked = "";
+    for (const line of lines) {
+      const s = normWs(line);
+      if (s.length < 3) continue;
+      if (/^[\d\s+().-]+$/.test(s)) continue;
+      if (/^\d+[-.)]\s*/.test(s) || /^\d+\s*[-.)]\s*/.test(s)) continue;
+      if (/^\d{1,2}[/-]\d/.test(s)) continue;
+      if (/^\d{1,2}\s+\d{1,2}\s+\d{4}$/.test(s)) continue;
+      if (/^(have|had|got)\s+one\s+before\b|^(one\s+before)\b|^(have\s+one)\b/i.test(s))
+        continue;
+      if (
+        /(?:EXP|CVV|BILLING|NECKLACE|SMARTWATCH|DEBIT|MASTER|VISA|CREDIT\s+CARD|EXPIRATION)\b/i.test(
+          s
+        )
+      )
+        continue;
+      if (/^(credit|debit)\b/i.test(s)) continue;
+      if (/\d+\.\d{2}/.test(s) || s.includes("$")) continue;
+      if (/^(smartwatch|necklace)\b/i.test(s)) continue;
+      if (/^emergency\s+contact\b/i.test(s)) continue;
+      if (isPaymentOrBankLine(s)) continue;
+      if (/^p\.?\s*o\.?\s*box\b|\bbox\s+\d/i.test(s)) continue;
+      const parts = s.split(/\s+/);
+      if (parts.length >= 2 && parts.length <= 5 && !/\d{5}/.test(s)) {
+        if (/^[A-Za-z'.-]+$/.test(parts[0])) picked = s;
+      }
+    }
+    return picked;
+  }
+
+  function scrubGluedZipOrdinal(s) {
+    return (s || "").replace(/(?<!\d)(\d{5})\d+(?:st|nd|rd|th)\b/gi, "$1");
+  }
+
+  const US_STATE_FULL_TO_ABBR = {
+    alabama: "AL",
+    alaska: "AK",
+    arizona: "AZ",
+    arkansas: "AR",
+    california: "CA",
+    colorado: "CO",
+    connecticut: "CT",
+    delaware: "DE",
+    florida: "FL",
+    georgia: "GA",
+    hawaii: "HI",
+    idaho: "ID",
+    illinois: "IL",
+    indiana: "IN",
+    iowa: "IA",
+    kansas: "KS",
+    kentucky: "KY",
+    louisiana: "LA",
+    maine: "ME",
+    maryland: "MD",
+    massachusetts: "MA",
+    michigan: "MI",
+    minnesota: "MN",
+    mississippi: "MS",
+    missouri: "MO",
+    montana: "MT",
+    nebraska: "NE",
+    nevada: "NV",
+    "new hampshire": "NH",
+    "new jersey": "NJ",
+    "new mexico": "NM",
+    "new york": "NY",
+    "north carolina": "NC",
+    "north dakota": "ND",
+    ohio: "OH",
+    oklahoma: "OK",
+    oregon: "OR",
+    pennsylvania: "PA",
+    "rhode island": "RI",
+    "south carolina": "SC",
+    "south dakota": "SD",
+    tennessee: "TN",
+    texas: "TX",
+    utah: "UT",
+    vermont: "VT",
+    virginia: "VA",
+    washington: "WA",
+    "west virginia": "WV",
+    wisconsin: "WI",
+    wyoming: "WY",
+    "district of columbia": "DC",
+  };
+
+  function parseCityStateZipFullState(tIn) {
+    const t = normWs(scrubGluedZipOrdinal((tIn || "").replace(/\n/g, " "))).trim();
+    const mzip = t.match(/\s+(\d{5}(?:-\d{4})?)\s*$/);
+    if (!mzip) return null;
+    const zipc = mzip[1];
+    const rest = t.slice(0, mzip.index).trim().replace(/,$/, "").trim();
+    if (!rest) return null;
+    const rl = rest.toLowerCase();
+    const keys = Object.keys(US_STATE_FULL_TO_ABBR).sort((a, b) => b.length - a.length);
+    for (const full of keys) {
+      if (!rl.endsWith(full)) continue;
+      const cityStreet = rest
+        .slice(0, rest.length - full.length)
+        .trim()
+        .replace(/,$/, "")
+        .trim();
+      if (!cityStreet) continue;
+      const abbr = US_STATE_FULL_TO_ABBR[full];
+      const synthetic = cityStreet + " " + abbr + " " + zipc;
+      const sp = parseCityStateZipSpace(synthetic);
+      if (sp && sp[2] === abbr && sp[3] === zipc) return sp;
+      return [cityStreet, "", abbr, zipc];
+    }
+    return null;
+  }
+
+  function parseCityStateZipSpace(tIn) {
+    const t = normWs(scrubGluedZipOrdinal((tIn || "").replace(/\n/g, " "))).trim();
+    const m = t.match(/\s+([A-Z]{2})\s+(?:Zip\s*)?(\d{5}(?:-\d{4})?)\s*$/i);
+    if (!m) return null;
+    const state = m[1].toUpperCase();
+    const zipc = m[2];
+    const before = t.slice(0, m.index).trim().replace(/,$/, "").trim();
+    if (!before) return null;
+    const po = /^(p\.?\s*o\.?\s*box\s+[\w-]+)\s+(.+)$/i.exec(before);
+    if (po) {
+      return [normWs(po[1]), normWs(po[2]), state, zipc];
+    }
+    const streetTypes =
+      "ST|AVE|RD|BLVD|DR|LN|WAY|CT|PL|CIR|PKWY|HWY|RT|ROUTE|POINT|STREET|AVENUE|ROAD|DRIVE|LANE|BOULEVARD";
+    const sm = new RegExp("^(.+?)\\s+(" + streetTypes + ")\\s+(.+)$", "i").exec(before);
+    if (sm) {
+      const street = normWs(sm[1] + " " + sm[2]);
+      const city = normWs(sm[3]);
+      return [street, city, state, zipc];
+    }
+    const words = before.split(/\s+/);
+    if (words.length >= 4) {
+      return [
+        words.slice(0, -2).join(" "),
+        words.slice(-2).join(" "),
+        state,
+        zipc,
+      ];
+    }
+    if (words.length === 3) return [words[0] + " " + words[1], words[2], state, zipc];
+    if (words.length === 2) return [words[0], words[1], state, zipc];
+    return [before, "", state, zipc];
+  }
+
+  function expandFourDigitZipTail(s) {
+    const t = normWs(s || "").trim();
+    const m = t.match(/\b([A-Z]{2})\s+(\d{4})\s*$/i);
+    if (!m) return t;
+    const z = m[2];
+    if (z.length !== 4 || !/^\d+$/.test(z)) return t;
+    if (!t.endsWith(z)) return t;
+    return t.slice(0, t.length - z.length) + "0" + z;
+  }
+
+  function normalizeZipPlusFourSpace(s) {
+    return (s || "").replace(/\b(\d{5})\s+(\d{4})\b/g, "$1-$2");
+  }
+
+  function addressLineScore(s) {
+    const s2 = normalizeZipPlusFourSpace(expandFourDigitZipTail(s.trim()));
+    const p = parseCityStateZip(s2);
+    let sc = 0;
+    if (p[3]) sc += 5;
+    if (p[2]) sc += 3;
+    if (p[1]) sc += 2;
+    if (p[0] && p[0].length > 4) sc += 1;
+    return sc;
+  }
+
+  function looksLikeStreetOnlyLine(s) {
+    const x = (s || "").trim();
+    if (x.length < 6 || x.length > 80) return false;
+    if (
+      /\b(?:EXP|CVV|BILLING|VISA|MASTER|AMEX|NECKLACE|SMART|CONTACT|LANDLINE|CELL)\b/i.test(
+        x
+      )
+    )
+      return false;
+    if (/\d{10}/.test(x)) return false;
+    if (
+      /\b(?:PL|PLACE|ST|AVE|RD|DR|LN|BLVD|CT|WAY|CIR|BOULEVARD|ROAD|LANE)\b/i.test(x) &&
+      /\d/.test(x)
+    )
+      return true;
+    if (/^\d+\s+[A-Za-z]/.test(x) && !/\b[A-Z]{2}\s+\d{4,5}\s*$/i.test(x)) return true;
+    return false;
+  }
+
+  function pickBestAddressLine(lines) {
+    const zipRe = /\b\d{5}(?:-\d{4})?\b/;
+    const stZip = /\b[A-Z]{2}\s+\d{4,5}\s*$/i;
+    let best = "";
+    let bestSc = -1;
+    for (const line of lines) {
+      const s = line.trim();
+      if (!s) continue;
+      if (/^[\d\s+().-]+$/.test(s)) continue;
+      if (
+        /^\d{10}\s*(?:(?:\/\/|\/)\s*)?(?:cell|phone|mobile|cellphone|CELLPHONE|landline|LANDLINE)?\s*$/i.test(
+          s
+        )
+      )
+        continue;
+      if (/^\d{1,2}[/-]\d/.test(s)) continue;
+      if (/^\d{1,2}\s+\d{1,2}\s+\d{4}$/.test(s)) continue;
+      if (isPaymentOrBankLine(s)) continue;
+      if (/^(necklace|neclace|necklase|smart\s*watch|smartwatch)\b/i.test(s)) continue;
+      if (
+        /(?:EXP|CVV|BILLING|DEBIT|MASTER|VISA|CREDIT\s*CARD|EXPIRATION|AMERICAN\s+EXPRESS)\b/i.test(
+          s
+        )
+      )
+        continue;
+      if (/^emergency\s+contact\b/i.test(s)) continue;
+      let sc = -1;
+      if (zipRe.test(s) && /[A-Za-z]/.test(s))
+        sc = Math.max(sc, addressLineScore(s));
+      if (stZip.test(s) && /\d/.test(s)) sc = Math.max(sc, addressLineScore(s));
+      if (looksLikeStreetOnlyLine(s)) sc = Math.max(sc, 1);
+      if (sc > bestSc) {
+        bestSc = sc;
+        best = s;
+      }
+    }
+    return best;
+  }
+
+  function parseCityStateZip(text) {
+    let t = normWs(scrubGluedZipOrdinal((text || "").replace(/\n/g, " "))).trim();
+    t = expandFourDigitZipTail(t);
+    let m = t.match(/,\s*([^,]+?),\s*([A-Z]{2})\s*,?\s*(\d{5}(?:-\d{4})?)\s*$/);
+    if (m) {
+      let city = normWs(m[1]).replace(/,$/, "").trim();
+      const state = m[2].toUpperCase();
+      const zipc = m[3];
+      let street = t.slice(0, m.index).trim().replace(/,$/, "").trim();
+      const mfix = city.match(/^(H\d+)\s+(.+)$/);
+      if (mfix) {
+        street = normWs(street + ", " + mfix[1]);
+        city = normWs(mfix[2]);
+      }
+      return [street, city, state, zipc];
+    }
+    m = t.match(/^(.+),\s*([A-Z]{2})\s+(\d{5}(?:-\d{4})?)\s*$/i);
+    if (m) {
+      const rest = normWs(m[1]).replace(/,$/, "").trim();
+      const state = m[2].toUpperCase();
+      const zipc = m[3];
+      const words = rest.split(/\s+/);
+      if (words.length >= 2) {
+        return [
+          words.slice(0, -1).join(" "),
+          words[words.length - 1],
+          state,
+          zipc,
+        ];
+      }
+      return [rest, "", state, zipc];
+    }
+    const space = parseCityStateZipSpace(t);
+    if (space) return space;
+    m = t.match(/([A-Za-z0-9 .'#-]+)\s+([A-Za-z]{2})\s+(\d{5}(?:-\d{4})?)\s*$/i);
+    if (m) {
+      const before = t.slice(0, m.index).trim().replace(/,$/, "");
+      const city = m[1].trim().replace(/,$/, "").trim();
+      return [before, city, m[2].toUpperCase(), m[3]];
+    }
+    const fs = parseCityStateZipFullState(t);
+    if (fs) return fs;
+    return [t, "", "", ""];
+  }
+
+  function stripAgentAttributionLines(note) {
+    return (note || "")
+      .split(/\r?\n/)
+      .filter((line) => !/^for\s+[a-z]/i.test(line.trim()))
+      .join("\n");
+  }
+
+  function truncateConcatenatedLeads(note) {
+    const raw = (note || "").trim();
+    const parts = raw.split(
+      /\n(?=\d{10}\s*(?:\/\/|\/)\s*(?:cell|landline|CELL|LANDLINE|cellphone))/gim
+    );
+    if (parts.length >= 2 && parts[0].trim()) return parts[0].trim();
+    return raw;
+  }
+
+  function hyphenEmergencyTriples(text) {
+    const out = [];
+    for (const rawLine of (text || "").split(/\r?\n/)) {
+      const s = rawLine.trim();
+      if (!s) continue;
+      if (/visa|master(?:card)?|discover|\bamex\b|\bcvv\b|\bexp\b|necklace|smartwatch/i.test(s))
+        continue;
+      if (/\d{13,19}/.test(s)) continue;
+      const m = s.match(/^(.+?)\s*[-–]\s*(.+?)\s*[-–]\s*(\d{10})\s*$/i);
+      if (!m) continue;
+      const left = normWs(m[1]);
+      const mid = normWs(m[2]);
+      const dig = digitsOnly(m[3]);
+      if (dig.length !== 10) continue;
+      if (/^\d{1,2}\s*\/\s*\d{2}/.test(mid)) continue;
+      if (left.replace(/[^A-Za-z]/g, "").length < 2 || mid.length < 2) continue;
+      out.push([left, mid, dig]);
+    }
+    return out;
+  }
+
+  function parseEmergency(text, primaryPhone) {
+    const t = text || "";
+    let ef = "";
+    let el = "";
+    let rel = "";
+    let phone = "";
+    const mSl = t.match(
+      /emergency\s+contact\s*\/\/\s*([^/]+?)\s*\/\/\s*([A-Za-z]{2,20})\s*\/\/\s*(\d{10})\b/is
+    );
+    const mEc = t.match(
+      /emergency\s+contact\s*:\s*(.+?)\s+(daughter|son|wife|husband|mother|father|brother|sister|friend|spouse|fiancee?|grandson|granddaughter)\s+(\d{10})\b/is
+    );
+    if (mSl) {
+      const fl = firstNameForForm(normWs(mSl[1]));
+      ef = fl[0];
+      el = fl[1];
+      rel = normWs(mSl[2]);
+      phone = digitsOnly(mSl[3]);
+    } else if (mEc) {
+      const fl = firstNameForForm(normWs(mEc[1]));
+      ef = fl[0];
+      el = fl[1];
+      rel = normWs(mEc[2]);
+      phone = digitsOnly(mEc[3]);
+    }
+    if (!(ef || el || phone)) {
+      const triples = hyphenEmergencyTriples(t);
+      if (triples.length) {
+        const ppd = digitsOnly(primaryPhone || "");
+        let chosen = triples[0];
+        for (const row of triples) {
+          if (ppd && row[2] !== ppd) {
+            chosen = row;
+            break;
+          }
+        }
+        const fl = firstNameForForm(chosen[0]);
+        ef = fl[0];
+        el = fl[1];
+        rel = chosen[1]
+          .split(/\s+/)
+          .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+          .join(" ");
+        phone = digitsOnly(chosen[2]);
+      }
+    }
+    let rm = t.match(
+      /EMERGENCY\s+CONTACT\s*,?\s*(.+?)(?:\n|$)|emrg\s+contact\s*:\s*(.+?)(?:\n|$)/is
+    );
+    if (rm && !mSl && !mEc && !(ef || el || phone)) rel = normWs(rm[1] || rm[2] || "");
+    const pm = t.match(/(?:EMERGENCY|emrg)[^\d]{0,40}(\d{10})\b/i);
+    if (pm && !phone) phone = digitsOnly(pm[1] || "");
+    const pm2 = t.match(
+      /(?:DAUGHTER|SON|WIFE|HUSBAND|FIANCEE?|SPOUSE)\s*-\s*(\d{10})\b/i
+    );
+    if (pm2 && !phone) phone = digitsOnly(pm2[1]);
+    const pmRel = t.match(
+      /(?:daughter|son|wife|husband)\s+[A-Za-z][A-Za-z'\s-]{2,35}\s+(\d{10})\b/i
+    );
+    if (pmRel && !phone) phone = digitsOnly(pmRel[1]);
+    if (ef || el || phone) return [ef, el, phone, rel];
+    const relStart =
+      /^(wife|husband|son|daughter|friend|fiancee?|spouse|mother|father|brother|sister|grandson|granddaughter)\b/i;
+    const linesArr = t.split(/\r?\n/);
+    for (const rawLine of linesArr) {
+      const line = rawLine.trim();
+      const lm = line.match(/^([A-Za-z][A-Za-z\s'-]{1,35})\s*[-=]>\s*(.+)$/i);
+      if (!lm) continue;
+      const left = normWs(lm[1]);
+      const right = normWs(lm[2]);
+      if (relStart.test(right)) {
+        const fl = firstNameForForm(left);
+        ef = fl[0];
+        el = fl[1];
+        const mrel = right.match(relStart);
+        rel = mrel
+          ? mrel[1].charAt(0).toUpperCase() + mrel[1].slice(1).toLowerCase()
+          : right.slice(0, 48);
+        if (/\bsame\s+(?:num|#|number|phone|cell)\b/i.test(right)) {
+          if (primaryPhone) phone = digitsOnly(primaryPhone);
+          rel = (rel + " (same # as patient)").trim();
+        } else {
+          const phR = right.match(/\b(\d{10})\b/);
+          if (phR) phone = digitsOnly(phR[1]);
+        }
+      } else {
+        rel = right + " (" + left + ")";
+      }
+      break;
+    }
+    if (/\bsame\s+num\b/i.test(t) && !phone && !ef) {
+      rel = rel ? (rel + " (same # as patient)").trim() : "Same # as patient";
+    }
+    return [ef, el, phone, rel];
+  }
+
+  function parseAgentNote(note) {
+    const text = truncateConcatenatedLeads(stripAgentAttributionLines(note || ""));
+    const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+    const phones = findPhones(text);
+    const primaryPhone = pickPreferredPhone(text, phones);
+
+    const dates = findDates(text);
+    let dob = "";
+    const dm = text.match(
+      /(?:\d+\s*[-.)]\s*)?(?:DOB|date\s*of\s*birth)\s*[/#:]*\s*(\d{1,2})\s*[/\s-]\s*(\d{1,2})\s*[/\s-]\s*(\d{2,4})\b/i
+    );
+    if (dm) {
+      let yy = dm[3];
+      if (yy.length === 2) {
+        const y = parseInt(yy, 10);
+        yy = String(y < 50 ? 2000 + y : 1900 + y);
+      }
+      dob =
+        String(parseInt(dm[1], 10)).padStart(2, "0") +
+        "/" +
+        String(parseInt(dm[2], 10)).padStart(2, "0") +
+        "/" +
+        yy;
+    }
+    if (!dob) {
+      for (const d of dates) {
+        const y = parseInt(d.split("/")[2], 10);
+        if (y > 1900) {
+          dob = d;
+          break;
+        }
+      }
+    }
+    if (!dob && dates.length) dob = dates[0];
+
+    let fullName = "";
+    const nm = text.match(/NAME\s*\/\s*(.+?)(?:\r?\n|$)/i);
+    if (nm) fullName = normWs(nm[1]);
+    if (!fullName) {
+      for (const line of lines) {
+        const cm = line
+          .trim()
+          .match(/^(?:\d+\s*[-.)]\s*)?(?:customer\s*name)\s*[/#:]*\s*(.+)$/i);
+        if (cm) {
+          fullName = normWs(cm[1]);
+          break;
+        }
+      }
+    }
+    if (!fullName) fullName = parseNameLineCandidates(lines);
+    let first = "";
+    let last = "";
+    if (fullName) {
+      const fl = firstNameForForm(fullName);
+      first = fl[0];
+      last = fl[1];
+    }
+
+    const zipRe = /\b\d{5}(?:-\d{4})?\b/;
+    let addrLine = "";
+    for (const line of lines) {
+      const s = line.trim();
+      const lam = s.match(/^(?:\d+\s*[-.)]\s*)?(?:address|add)\s*[/#:]*\s*(.+)$/i);
+      if (lam && zipRe.test(lam[1])) {
+        addrLine = normWs(lam[1]);
+        break;
+      }
+    }
+    if (!addrLine) {
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        const s = line.trim();
+        if (/^[\d\s+().-]+$/.test(s)) continue;
+        if (
+          /^\d{10}\s*(?:(?:\/\/|\/)\s*)?(?:cell|phone|mobile|cellphone|CELLPHONE|landline|LANDLINE)?\s*$/i.test(
+            s
+          )
+        )
+          continue;
+        if (/^\d{1,2}[/-]\d/.test(s)) continue;
+        if (/^\d{1,2}\s+\d{1,2}\s+\d{4}$/.test(s)) continue;
+        if (isPaymentOrBankLine(s)) continue;
+        if (/^(necklace|neclace|necklase|smart\s*watch|smartwatch)\b/i.test(s)) continue;
+        if (
+          /(?:EXP|CVV|BILLING|DEBIT|MASTER|VISA|CREDIT\s*CARD|EXPIRATION|AMERICAN\s+EXPRESS)\b/i.test(
+            s
+          )
+        )
+          continue;
+        if (zipRe.test(s) && /[A-Za-z]{2,}/.test(s)) {
+          if (i > 0 && /^p\.?o\.?\s*box\b/i.test(lines[i - 1]))
+            addrLine = lines[i - 1] + " " + line;
+          else addrLine = line;
+          break;
+        }
+        if (/\b[A-Z]{2}\s+\d{4,5}\s*$/i.test(s) && /\d/.test(s)) {
+          addrLine = line;
+          break;
+        }
+      }
+    }
+    if (!addrLine) {
+      for (const line of lines) {
+        if (isPaymentOrBankLine(line)) continue;
+        if (/,[\s]*[A-Za-z]{2}[\s]*\d{5}/i.test(line)) {
+          addrLine = line;
+          break;
+        }
+      }
+    }
+    if (!addrLine) addrLine = pickBestAddressLine(lines);
+
+    const [street, city, state, zipc] = parseCityStateZip(
+      normalizeZipPlusFourSpace(expandFourDigitZipTail(addrLine))
+    );
+    const device = normalizeDevice(text);
+    const payment = inferPaymentPath(text);
+    const cardType = inferCardType(text);
+    const exp = parseCardExp(text) || "";
+    const cvv = parseCvv(text) || "";
+    const pan = payment === PAYMENT_BANK_ACCOUNT ? "" : findPan(text);
+    const billing = parseBillingDate(text);
+    const ft = firstTimeYesNo(text);
+    const company = currentCompany(text);
+    let ef, el, ep, erel;
+    [ef, el, ep, erel] = parseEmergency(text, primaryPhone);
+
+    if (phones.length >= 2 && !ep && /EMERGENCY/i.test(text)) {
+      const cand = phones[phones.length - 1];
+      if (cand !== primaryPhone) ep = cand;
+    }
+    if (ep === primaryPhone && !/\bsame\s+(?:num|#|number|phone|cell)\b/i.test(text))
+      ep = "";
+
+    let routing = "";
+    let account = "";
+    let bankName = "";
+    if (payment === PAYMENT_BANK_ACCOUNT) {
+      routing = parseLabeledRouting(text);
+      account = parseLabeledAccount(text);
+      if (!routing || !account) {
+        const cr = classifyRoutingAccount(extractDigitSequences(text));
+        if (!routing) routing = cr[0];
+        if (!account) account = cr[1];
+      }
+      bankName = parseBankNameFromNote(text);
+      if (!bankName) bankName = parseBankInstitutionLine(text);
+      if (!bankName) {
+        const bm = (text || "").match(
+          /(?:bank|name of the bank|institution name)\s*[:#]?\s*([A-Za-z0-9][A-Za-z0-9\s&'.-]{2,60})/i
+        );
+        if (bm) bankName = normWs(bm[1]);
+      }
+    }
+
+    let svc = "";
+    if (ft === "Yes") svc = SERVICE_NO_ACTIVE;
+    else svc = SERVICE_YES;
+
+    const comments = "";
+
+    return {
+      phone_number: primaryPhone,
+      device,
+      first_name: first,
+      last_name: last,
+      date_of_birth: dob,
+      address: street,
+      city,
+      state,
+      zip_code: zipc,
+      emergency_first: ef,
+      emergency_last: el,
+      emergency_phone: ep,
+      emergency_relation: erel,
+      payment_method: payment,
+      card_type: payment === PAYMENT_BANK_CARD ? cardType : CARD_TYPE_BANK_LABEL,
+      exp_date: payment === PAYMENT_BANK_CARD ? exp : "NA",
+      cvv: payment === PAYMENT_BANK_CARD ? cvv : "NA",
+      card_number: payment === PAYMENT_BANK_CARD ? pan : "NA",
+      bank_account_type:
+        payment === PAYMENT_BANK_CARD
+          ? BANK_OTHER
+          : /\bsavings?\b/i.test(text)
+            ? BANK_SAVING
+            : BANK_CHECKING,
+      bank_name: payment === PAYMENT_BANK_CARD ? "NA" : bankName,
+      routing_number: payment === PAYMENT_BANK_CARD ? "NA" : routing,
+      account_number: payment === PAYMENT_BANK_CARD ? "NA" : account,
+      billing_date: billing,
+      first_time_device: ft,
+      service_active: svc,
+      current_company: company,
+      center_name: CENTER_NAME,
+      comments,
+    };
+  }
+
+  const PAYMENT_KEYS = new Set([
+    "payment_method",
+    "card_type",
+    "exp_date",
+    "cvv",
+    "card_number",
+    "bank_account_type",
+    "bank_name",
+    "routing_number",
+    "account_number",
+  ]);
+
+  function buildPrefillUrl(data, omitPayment) {
+    const params = new URLSearchParams();
+    params.set("usp", "pp_url");
+    for (const [key, val] of Object.entries(data)) {
+      if (val === null || val === undefined || val === "") continue;
+      if (omitPayment && PAYMENT_KEYS.has(key)) continue;
+      const eid = ENTRY_IDS[key];
+      if (!eid) continue;
+      params.set("entry." + eid, String(val).trim());
+    }
+    return FORM_BASE + "?" + params.toString();
+  }
+
+  function sanityCheckParsed(data, rawNote) {
+    const issues = [];
+    const raw = rawNote || "";
+    const dig = String(data.phone_number || "").replace(/\D/g, "");
+    if (dig.length !== 10) issues.push("phone_number: expected 10 digits.");
+    if (data.device !== DEVICE_SMARTWATCH && data.device !== DEVICE_NECKLACE)
+      issues.push("device: should match a known form radio label.");
+    const st = (data.state || "").trim();
+    if (st && !/^[A-Z]{2}$/.test(st)) issues.push("state: expected 2-letter abbrev when present.");
+    const z = (data.zip_code || "").trim();
+    if (z && !/^\d{5}(-\d{4})?$/.test(z)) issues.push("zip_code: unusual format.");
+    if (/\b\d{5}\b/.test(raw) && !z) issues.push("zip_code: note may contain a ZIP but parsed ZIP is empty.");
+    if (data.payment_method === PAYMENT_BANK_ACCOUNT) {
+      const rt = String(data.routing_number || "").replace(/\D/g, "");
+      const ac = String(data.account_number || "").replace(/\D/g, "");
+      if (rt.length !== 9) issues.push("routing_number: bank path but routing is not 9 digits.");
+      if (ac.length < 4) issues.push("account_number: bank path but account looks missing.");
+      const bn = (data.bank_name || "").trim();
+      if (!bn || bn === "NA") issues.push("bank_name: empty on bank path.");
+    }
+    if (data.payment_method === PAYMENT_BANK_CARD) {
+      const pan = String(data.card_number || "").replace(/\D/g, "");
+      if (pan.length < 15) issues.push("card_number: card path but PAN looks short.");
+    }
+    if (!issues.length) issues.push("(No obvious issues — still verify every field.)");
+    return issues;
+  }
+
+  function formatParsedReview(data, raw) {
+    let review = "";
+    for (const k of Object.keys(data).sort()) {
+      review += k + ": " + data[k] + "\n";
+    }
+    review += "\n--- sanity (heuristic) ---\n";
+    review += sanityCheckParsed(data, raw).join("\n");
+    return review;
+  }
+
+  function runRegressionFromJsonText(jsonText) {
+    let data;
+    try {
+      data = JSON.parse(jsonText);
+    } catch (e) {
+      return "Invalid JSON: " + e.message;
+    }
+    const examples = data.examples || [];
+    if (!examples.length) return "No examples array in JSON.";
+    const failures = [];
+    for (let i = 0; i < examples.length; i++) {
+      const ex = examples[i] || {};
+      const note = String(ex.note || "").trim();
+      const expected = ex.fields || {};
+      if (!note) {
+        failures.push("#" + (i + 1) + ": empty note");
+        continue;
+      }
+      const got = parseAgentNote(note);
+      for (const key of Object.keys(expected)) {
+        const expS = String(expected[key] != null ? expected[key] : "").trim();
+        const gotS = String(got[key] != null ? got[key] : "").trim();
+        if (gotS !== expS) {
+          failures.push(
+            "#" +
+              (i + 1) +
+              " " +
+              key +
+              ":\n  expected: " +
+              JSON.stringify(expS) +
+              "\n  got:      " +
+              JSON.stringify(gotS)
+          );
+        }
+      }
+    }
+    if (failures.length) {
+      return (
+        "FAILED " +
+        failures.length +
+        " assertion(s) in " +
+        examples.length +
+        " example(s):\n\n" +
+        failures.join("\n\n")
+      );
+    }
+    return "OK - all " + examples.length + " example(s) match on declared fields.";
+  }
+
+  function run(omitPayment) {
+    const raw = document.getElementById("note").value;
+    if (!normWs(raw)) {
+      alert("Paste the agent note first.");
+      return;
+    }
+    const data = parseAgentNote(raw);
+    const url = buildPrefillUrl(data, omitPayment);
+    document.getElementById("urlOut").value = url;
+    document.getElementById("review").textContent = formatParsedReview(data, raw);
+
+    const w = window.open(url, "_blank", "noopener,noreferrer");
+    if (!w) {
+      alert("Pop-up blocked. Use Copy link and paste it in the browser address bar.");
+    }
+  }
+
+  document.getElementById("btnOpen").addEventListener("click", () => run(false));
+  document.getElementById("btnOpenSafe").addEventListener("click", () => run(true));
+  document.getElementById("btnCheck").addEventListener("click", () => {
+    const raw = document.getElementById("note").value;
+    if (!normWs(raw)) {
+      alert("Paste the agent note first.");
+      return;
+    }
+    const data = parseAgentNote(raw);
+    document.getElementById("urlOut").value = buildPrefillUrl(data, false);
+    document.getElementById("review").textContent = formatParsedReview(data, raw);
+    document.getElementById("detailsReview")?.setAttribute("open", "");
+  });
+  document.getElementById("btnRegression").addEventListener("click", () => {
+    const inp = document.getElementById("regressionFile");
+    const f = inp.files && inp.files[0];
+    if (!f) {
+      alert("Choose mla_few_shot_examples.json first.");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = function () {
+      document.getElementById("regressionOut").textContent = runRegressionFromJsonText(String(reader.result || ""));
+      document.getElementById("detailsRegression")?.setAttribute("open", "");
+    };
+    reader.readAsText(f, "UTF-8");
+  });
+  document.getElementById("btnCopy").addEventListener("click", async () => {
+    const raw = document.getElementById("note").value;
+    if (!normWs(raw)) {
+      alert("Paste the agent note first.");
+      return;
+    }
+    const data = parseAgentNote(raw);
+    const url = buildPrefillUrl(data, false);
+    document.getElementById("urlOut").value = url;
+    document.getElementById("review").textContent = formatParsedReview(data, raw);
+    try {
+      await navigator.clipboard.writeText(url);
+      alert("Link copied. Paste into the browser address bar if the form did not open.");
+    } catch (e) {
+      document.getElementById("urlOut").select();
+      alert("Select the link in the box and copy (Ctrl+C).");
+    }
+  });
+})();
+  </script>
+</body>
+</html>
