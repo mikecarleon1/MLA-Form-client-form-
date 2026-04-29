@@ -230,7 +230,80 @@
       max-width: 100%;
       color: var(--muted);
     }
-  </style>
+    .cfg-field {
+      margin-top: 0.65rem;
+    }
+    .cfg-field input[type="url"],
+    .cfg-field input[type="text"],
+    .cfg-field input[type="password"] {
+      width: 100%;
+      margin-top: 0.25rem;
+      padding: 0.5rem 0.65rem;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      background: rgba(0, 0, 0, 0.35);
+      color: var(--text);
+      font-family: inherit;
+      font-size: 0.85rem;
+    }
+    .cfg-hint {
+      font-size: 0.72rem;
+      color: var(--muted);
+      margin-top: 0.2rem;
+      line-height: 1.35;
+    }
+    .compliance-box {
+      margin-top: 0.85rem;
+      padding: 0.75rem 0.85rem;
+      border-radius: var(--radius-sm);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: rgba(0, 0, 0, 0.25);
+      font-size: 0.8rem;
+    }
+    .compliance-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.5rem;
+      padding: 0.35rem 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    .compliance-row:last-child {
+      border-bottom: none;
+    }
+    .compliance-ico {
+      flex-shrink: 0;
+      width: 1.35rem;
+      text-align: center;
+      font-weight: 700;
+    }
+    .pass .compliance-ico {
+      color: var(--ok);
+    }
+    .fail .compliance-ico {
+      color: #ff6b6b;
+    }
+    .warn .compliance-ico {
+      color: var(--warn-text);
+    }
+    .idle .compliance-ico {
+      color: var(--muted);
+    }
+    .compliance-body {
+      flex: 1;
+      min-width: 0;
+      color: #c5d4e5;
+      line-height: 1.4;
+    }
+    .compliance-title {
+      font-weight: 600;
+      color: var(--text);
+      font-size: 0.78rem;
+      margin-bottom: 0.15rem;
+    }
+    .btn-compliance {
+      width: 100%;
+      margin-top: 0.65rem;
+    }
 </head>
 <body>
   <div class="wrap">
@@ -243,6 +316,60 @@
 
       <label for="note">Agent note</label>
       <textarea id="note" placeholder="Phone, name, DOB, address, payment, emergency contact…"></textarea>
+
+      <details id="detailsComplianceCfg">
+        <summary>Compliance URLs &amp; logins (saved only on this device)</summary>
+        <p class="cfg-hint" style="margin-top: 0.45rem">
+          Your DNC / “clean number” hosts must allow this site in <strong>CORS</strong>, or the browser cannot read the response. If a check fails to load, use the manual link.
+        </p>
+        <div class="cfg-field">
+          <label for="cfgDncUrl">1 · DNC list URL</label>
+          <input type="url" id="cfgDncUrl" placeholder="https://example.com/dnc-list.txt" autocomplete="off" />
+          <div class="cfg-hint">Plain text or CSV: one 10-digit number per line (other digits on a line are ignored).</div>
+        </div>
+        <div class="cfg-field">
+          <label for="cfgCleanUrl">2 · Clean number check URL</label>
+          <input type="url" id="cfgCleanUrl" placeholder="https://api.example.com/lookup?phone={phone}" autocomplete="off" />
+          <div class="cfg-hint">Use <code>{phone}</code> where the 10-digit number should go (no spaces).</div>
+        </div>
+        <div class="cfg-field">
+          <label for="cfgCleanUser">Username (optional)</label>
+          <input type="text" id="cfgCleanUser" autocomplete="username" />
+        </div>
+        <div class="cfg-field">
+          <label for="cfgCleanPass">Password (optional)</label>
+          <input type="password" id="cfgCleanPass" autocomplete="current-password" />
+        </div>
+        <div class="cfg-field">
+          <label for="cfgCardUrl">3 · Card check page (optional)</label>
+          <input type="url" id="cfgCardUrl" placeholder="Leave empty to use public BIN lookup + Luhn check" autocomplete="off" />
+          <div class="cfg-hint">If set, a button opens this URL. Card validity always includes a local Luhn check and <strong>lookup.binlist.net</strong> (first 8 digits, public).</div>
+        </div>
+        <button type="button" class="btn-secondary" id="btnSaveComplianceCfg" style="margin-top: 0.75rem">Save compliance settings</button>
+      </details>
+
+      <button type="button" class="btn-secondary btn-compliance" id="btnComplianceRun">Run compliance checks</button>
+
+      <div id="complianceBox" class="compliance-box" hidden>
+        <div class="compliance-title">Last compliance run</div>
+        <div id="complianceDnc" class="compliance-row idle">
+          <span class="compliance-ico">·</span>
+          <div class="compliance-body"><span class="compliance-title">DNC list</span><span id="complianceDncText">—</span></div>
+        </div>
+        <div id="complianceClean" class="compliance-row idle">
+          <span class="compliance-ico">·</span>
+          <div class="compliance-body"><span class="compliance-title">Clean number</span><span id="complianceCleanText">—</span></div>
+        </div>
+        <div id="complianceCard" class="compliance-row idle">
+          <span class="compliance-ico">·</span>
+          <div class="compliance-body"><span class="compliance-title">Card</span><span id="complianceCardText">—</span></div>
+        </div>
+        <div class="file-row" style="margin-top: 0.5rem">
+          <button type="button" class="btn-secondary" id="btnOpenDnc" hidden>Open DNC link</button>
+          <button type="button" class="btn-secondary" id="btnOpenClean" hidden>Open clean-number link</button>
+          <button type="button" class="btn-secondary" id="btnOpenCard" hidden>Open card check page</button>
+        </div>
+      </div>
 
       <div class="actions">
         <button type="button" class="btn-primary" id="btnOpen">Open form</button>
@@ -1449,12 +1576,237 @@
     return "OK - all " + examples.length + " example(s) match on declared fields.";
   }
 
-  function run(omitPayment) {
+  const LS_COMPLIANCE = {
+    dnc: "mla_compliance_dnc_url",
+    clean: "mla_compliance_clean_url",
+    cleanUser: "mla_compliance_clean_user",
+    cleanPass: "mla_compliance_clean_pass",
+    card: "mla_compliance_card_url",
+  };
+
+  function loadComplianceCfg() {
+    return {
+      dncUrl: (localStorage.getItem(LS_COMPLIANCE.dnc) || "").trim(),
+      cleanUrl: (localStorage.getItem(LS_COMPLIANCE.clean) || "").trim(),
+      cleanUser: (localStorage.getItem(LS_COMPLIANCE.cleanUser) || "").trim(),
+      cleanPass: (localStorage.getItem(LS_COMPLIANCE.cleanPass) || "").trim(),
+      cardUrl: (localStorage.getItem(LS_COMPLIANCE.card) || "").trim(),
+    };
+  }
+
+  function saveComplianceCfgFromInputs() {
+    localStorage.setItem(LS_COMPLIANCE.dnc, document.getElementById("cfgDncUrl").value.trim());
+    localStorage.setItem(LS_COMPLIANCE.clean, document.getElementById("cfgCleanUrl").value.trim());
+    localStorage.setItem(LS_COMPLIANCE.cleanUser, document.getElementById("cfgCleanUser").value.trim());
+    localStorage.setItem(LS_COMPLIANCE.cleanPass, document.getElementById("cfgCleanPass").value.trim());
+    localStorage.setItem(LS_COMPLIANCE.card, document.getElementById("cfgCardUrl").value.trim());
+    alert("Compliance settings saved on this device.");
+  }
+
+  function initComplianceCfgInputs() {
+    const c = loadComplianceCfg();
+    document.getElementById("cfgDncUrl").value = c.dncUrl;
+    document.getElementById("cfgCleanUrl").value = c.cleanUrl;
+    document.getElementById("cfgCleanUser").value = c.cleanUser;
+    document.getElementById("cfgCleanPass").value = c.cleanPass;
+    document.getElementById("cfgCardUrl").value = c.cardUrl;
+  }
+
+  function extractDncPhonesFromText(text) {
+    const set = new Set();
+    const t = text || "";
+    let m;
+    const re = /\b(\d{10})\b/g;
+    while ((m = re.exec(t))) set.add(m[1]);
+    return set;
+  }
+
+  function panLuhnValid(pan) {
+    const d = String(pan).replace(/\D/g, "");
+    if (d.length < 13 || d.length > 19) return false;
+    let sum = 0;
+    let dbl = false;
+    for (let i = d.length - 1; i >= 0; i--) {
+      let n = d.charCodeAt(i) - 48;
+      if (n < 0 || n > 9) return false;
+      if (dbl) {
+        n *= 2;
+        if (n > 9) n -= 9;
+      }
+      sum += n;
+      dbl = !dbl;
+    }
+    return sum % 10 === 0;
+  }
+
+  function setComplianceRow(rowEl, state) {
+    rowEl.className =
+      "compliance-row " + (state === "pass" ? "pass" : state === "fail" ? "fail" : state === "warn" ? "warn" : "idle");
+    const ico = rowEl.querySelector(".compliance-ico");
+    if (ico) ico.textContent = state === "pass" ? "✓" : state === "fail" ? "✕" : state === "warn" ? "!" : "·";
+  }
+
+  async function checkDncAsync(phone10, url) {
+    if (!url) return { state: "idle", text: "Not configured.", manual: false };
+    if (!phone10 || phone10.length !== 10)
+      return { state: "warn", text: "No 10-digit primary phone parsed from the note.", manual: false };
+    try {
+      const r = await fetch(url, { method: "GET", mode: "cors" });
+      if (!r.ok) return { state: "warn", text: "Could not load list (HTTP " + r.status + "). Use Open DNC link.", manual: true };
+      const text = await r.text();
+      if (extractDncPhonesFromText(text).has(phone10))
+        return { state: "fail", text: "This number appears on the loaded DNC list.", manual: true };
+      return { state: "pass", text: "Not on the loaded DNC list.", manual: true };
+    } catch (e) {
+      return {
+        state: "warn",
+        text: "Could not read the list from here (often CORS). Use Open DNC link to verify.",
+        manual: true,
+      };
+    }
+  }
+
+  async function checkCleanAsync(phone10, url, user, pass) {
+    if (!url) return { state: "idle", text: "Not configured.", manual: false };
+    if (!phone10 || phone10.length !== 10)
+      return { state: "warn", text: "No primary phone to send to your URL.", manual: false };
+    const built = url.replace(/\{phone\}/g, phone10);
+    const headers = { Accept: "application/json, text/plain, */*" };
+    if (user || pass) {
+      try {
+        headers["Authorization"] = "Basic " + btoa(user + ":" + pass);
+      } catch (e) {
+        return { state: "warn", text: "Username/password must be ASCII for Basic auth in the browser.", manual: true };
+      }
+    }
+    try {
+      const r = await fetch(built, { method: "GET", mode: "cors", headers });
+      const bodyText = await r.text();
+      const low = bodyText.slice(0, 800).toLowerCase();
+      if (!r.ok) return { state: "warn", text: "HTTP " + r.status + ". Confirm on your portal.", manual: true };
+      let j = null;
+      try {
+        j = JSON.parse(bodyText);
+      } catch (_) {}
+      if (j && typeof j === "object") {
+        if (j.clean === true || j.isLitigator === false || j.valid === true || j.isClean === true)
+          return { state: "pass", text: "API JSON indicates clean / valid.", manual: true };
+        if (j.clean === false || j.isLitigator === true || j.valid === false || j.isClean === false || j.dnc === true)
+          return { state: "fail", text: "API JSON indicates not clean or flagged.", manual: true };
+      }
+      if (/\b(litigat|flagged|dnc\s*hit|on\s+dnc)\b/i.test(low))
+        return { state: "fail", text: "Response text may indicate a hit — verify on your portal.", manual: true };
+      if (/\b(clean|clear|ok|valid|pass)\b/i.test(low))
+        return { state: "pass", text: "Response text suggests OK (confirm on portal if unsure).", manual: true };
+      return { state: "warn", text: "Could not auto-score response. Confirm on your portal.", manual: true };
+    } catch (e) {
+      return { state: "warn", text: "Request failed (often CORS). Use Open clean-number link.", manual: true };
+    }
+  }
+
+  async function checkCardAsync(panDigits, manualCardUrl) {
+    const digits = (panDigits || "").replace(/\D/g, "");
+    if (digits.length < 13)
+      return { state: "idle", text: "No card number in note (or payment is bank account).", manual: false };
+    if (!panLuhnValid(digits))
+      return { state: "fail", text: "Card fails the Luhn check (invalid number).", manual: !!manualCardUrl };
+    let binLine = "";
+    try {
+      const r = await fetch("https://lookup.binlist.net/" + digits.slice(0, 8), {
+        headers: { Accept: "application/json" },
+        mode: "cors",
+      });
+      if (r.ok) {
+        const j = await r.json();
+        const scheme = j.scheme || "?";
+        const typ = j.type || "?";
+        const ctry = (j.country && j.country.name) || "";
+        binLine = " Public BIN: " + scheme + " / " + typ + (ctry ? " — " + ctry : "") + ".";
+      } else {
+        binLine = " Public BIN lookup returned HTTP " + r.status + ".";
+      }
+    } catch (e) {
+      binLine = " Public BIN lookup blocked or failed.";
+    }
+    return {
+      state: "pass",
+      text: "Luhn check passed." + binLine + (manualCardUrl ? " Use your card portal link if you need more." : ""),
+      manual: !!manualCardUrl,
+    };
+  }
+
+  async function runComplianceChecksAll(rawNote) {
+    const cfg = loadComplianceCfg();
+    const data = parseAgentNote(rawNote);
+    const phone = digitsOnly(data.phone_number || "").slice(0, 10);
+    const pan =
+      data.payment_method === PAYMENT_BANK_CARD ? String(data.card_number || "").replace(/\D/g, "") : "";
+
+    const dnc = await checkDncAsync(phone, cfg.dncUrl);
+    const clean = await checkCleanAsync(phone, cfg.cleanUrl, cfg.cleanUser, cfg.cleanPass);
+    const card = await checkCardAsync(pan, cfg.cardUrl);
+
+    document.getElementById("complianceBox").hidden = false;
+    document.getElementById("complianceDncText").textContent = dnc.text;
+    document.getElementById("complianceCleanText").textContent = clean.text;
+    document.getElementById("complianceCardText").textContent = card.text;
+    setComplianceRow(document.getElementById("complianceDnc"), dnc.state);
+    setComplianceRow(document.getElementById("complianceClean"), clean.state);
+    setComplianceRow(document.getElementById("complianceCard"), card.state);
+
+    const bD = document.getElementById("btnOpenDnc");
+    const bC = document.getElementById("btnOpenClean");
+    const bCard = document.getElementById("btnOpenCard");
+    bD.hidden = !cfg.dncUrl;
+    bC.hidden = !cfg.cleanUrl;
+    bCard.hidden = !cfg.cardUrl;
+    bD.onclick = () => window.open(cfg.dncUrl, "_blank", "noopener,noreferrer");
+    bC.onclick = () => {
+      if (!phone) return;
+      window.open(cfg.cleanUrl.replace(/\{phone\}/g, phone), "_blank", "noopener,noreferrer");
+    };
+    bCard.onclick = () => window.open(cfg.cardUrl, "_blank", "noopener,noreferrer");
+
+    return { dnc, clean, card };
+  }
+
+  async function ensureComplianceAllowsProceed(rawNote) {
+    const cfg = loadComplianceCfg();
+    const pre = parseAgentNote(rawNote);
+    const pan =
+      pre.payment_method === PAYMENT_BANK_CARD ? String(pre.card_number || "").replace(/\D/g, "") : "";
+    const hasCard = pan.length >= 13;
+    const any = cfg.dncUrl || cfg.cleanUrl || cfg.cardUrl || hasCard;
+    if (!any) return true;
+    const { dnc, clean, card } = await runComplianceChecksAll(rawNote);
+    if (dnc.state === "fail" || clean.state === "fail" || card.state === "fail") {
+      const lines = [];
+      if (dnc.state === "fail") lines.push("DNC: " + dnc.text);
+      if (clean.state === "fail") lines.push("Clean number: " + clean.text);
+      if (card.state === "fail") lines.push("Card: " + card.text);
+      alert(
+        "Compliance check failed — do not open the form until this is cleared:\n\n" + lines.join("\n\n"),
+      );
+      return false;
+    }
+    if (dnc.state === "warn" || clean.state === "warn" || card.state === "warn") {
+      if (
+        !confirm(
+          "One or more checks need manual confirmation (for example CORS blocked the browser).\n\nContinue anyway?",
+        )
+      )
+        return false;
+    }
+    return true;
+  }
+
+  async function run(omitPayment) {
     const raw = document.getElementById("note").value;
     if (!normWs(raw)) {
       alert("Paste the agent note first.");
       return;
     }
+    if (!(await ensureComplianceAllowsProceed(raw))) return;
     const data = parseAgentNote(raw);
     const url = buildPrefillUrl(data, omitPayment);
     document.getElementById("urlOut").value = url;
@@ -1468,12 +1820,17 @@
 
   document.getElementById("btnOpen").addEventListener("click", () => run(false));
   document.getElementById("btnOpenSafe").addEventListener("click", () => run(true));
-  document.getElementById("btnCheck").addEventListener("click", () => {
+  document.getElementById("btnCheck").addEventListener("click", async () => {
     const raw = document.getElementById("note").value;
     if (!normWs(raw)) {
       alert("Paste the agent note first.");
       return;
     }
+    const c = loadComplianceCfg();
+    const pre = parseAgentNote(raw);
+    const pan =
+      pre.payment_method === PAYMENT_BANK_CARD ? String(pre.card_number || "").replace(/\D/g, "") : "";
+    if (c.dncUrl || c.cleanUrl || c.cardUrl || pan.length >= 13) await runComplianceChecksAll(raw);
     const data = parseAgentNote(raw);
     document.getElementById("urlOut").value = buildPrefillUrl(data, false);
     document.getElementById("review").textContent = formatParsedReview(data, raw);
@@ -1499,6 +1856,7 @@
       alert("Paste the agent note first.");
       return;
     }
+    if (!(await ensureComplianceAllowsProceed(raw))) return;
     const data = parseAgentNote(raw);
     const url = buildPrefillUrl(data, false);
     document.getElementById("urlOut").value = url;
@@ -1511,6 +1869,16 @@
       alert("Select the link in the box and copy (Ctrl+C).");
     }
   });
+  document.getElementById("btnSaveComplianceCfg").addEventListener("click", saveComplianceCfgFromInputs);
+  document.getElementById("btnComplianceRun").addEventListener("click", async () => {
+    const raw = document.getElementById("note").value;
+    if (!normWs(raw)) {
+      alert("Paste the agent note first.");
+      return;
+    }
+    await runComplianceChecksAll(raw);
+  });
+  initComplianceCfgInputs();
 })();
   </script>
 </body>
