@@ -33,13 +33,53 @@
       min-height: 100vh;
       color: var(--text);
       line-height: 1.5;
+      position: relative;
+      background: linear-gradient(168deg, #05070c 0%, var(--bg0) 35%, var(--bg1) 70%, #080d14 100%);
+    }
+    body::before {
+      content: "";
+      position: fixed;
+      inset: -15%;
+      z-index: 0;
+      pointer-events: none;
       background:
-        radial-gradient(ellipse 900px 480px at 50% -20%, rgba(91, 140, 255, 0.14), transparent 55%),
-        radial-gradient(700px 400px at 100% 30%, rgba(157, 125, 255, 0.08), transparent 50%),
-        radial-gradient(600px 360px at 0% 80%, rgba(52, 199, 89, 0.04), transparent 45%),
-        linear-gradient(168deg, var(--bg0), var(--bg1) 42%, #0a1018);
+        radial-gradient(ellipse 100% 70% at 50% -25%, rgba(91, 140, 255, 0.22), transparent 52%),
+        radial-gradient(closest-side at 92% 18%, rgba(157, 125, 255, 0.2), transparent 42%),
+        radial-gradient(closest-side at 8% 35%, rgba(91, 180, 255, 0.12), transparent 38%),
+        radial-gradient(closest-side at 75% 88%, rgba(52, 199, 89, 0.08), transparent 40%),
+        radial-gradient(closest-side at 15% 92%, rgba(124, 92, 255, 0.1), transparent 35%),
+        radial-gradient(ellipse 80% 50% at 50% 110%, rgba(91, 140, 255, 0.06), transparent 50%);
+      animation: bg-spice-drift 22s ease-in-out infinite alternate;
+    }
+    body::after {
+      content: "";
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+      opacity: 0.45;
+      background-image: radial-gradient(rgba(255, 255, 255, 0.055) 1px, transparent 1.2px);
+      background-size: 28px 28px;
+      mix-blend-mode: overlay;
+    }
+    @keyframes bg-spice-drift {
+      0% {
+        transform: translate(0%, 0%) scale(1);
+        opacity: 1;
+      }
+      100% {
+        transform: translate(-3%, 2.5%) scale(1.04);
+        opacity: 0.92;
+      }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      body::before {
+        animation: none;
+      }
     }
     .wrap {
+      position: relative;
+      z-index: 1;
       max-width: 560px;
       margin: 0 auto;
       padding: clamp(1rem, 4vw, 1.75rem);
