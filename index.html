@@ -304,6 +304,30 @@
       width: 100%;
       margin-top: 0.65rem;
     }
+    .clean-manual-wrap {
+      margin-top: 0.5rem;
+      padding: 0.55rem 0.65rem;
+      border-radius: var(--radius-sm);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: rgba(0, 0, 0, 0.2);
+    }
+    .clean-manual-wrap label {
+      display: flex;
+      gap: 0.55rem;
+      align-items: flex-start;
+      cursor: pointer;
+      font-size: 0.78rem;
+      color: var(--muted);
+      line-height: 1.4;
+      margin: 0;
+    }
+    .clean-manual-wrap input[type="checkbox"] {
+      margin-top: 0.2rem;
+      flex-shrink: 0;
+    }
+    .compliance-body > .compliance-title {
+      margin-right: 0.35rem;
+    }
   </style>
 </head>
 <body>
@@ -322,7 +346,7 @@
         <summary>Compliance URLs &amp; logins (saved only on this device)</summary>
         <p class="cfg-hint" style="margin-top: 0.45rem">
           <strong>DNC:</strong> paste your Google Sheet <strong>edit</strong> link or the CSV export URL — the tool converts Sheets to CSV when possible.
-          <strong>CleanMyNumbers:</strong> the site cannot be read automatically from the browser; we copy the phone, open the tab, and you confirm the result.
+          <strong>CleanMyNumbers:</strong> the site cannot be read automatically from the browser; we copy the phone, open the tab, then you tick the confirmation under <strong>Last compliance run</strong> when the site shows clean.
           <strong>Card:</strong> Luhn + public BIN run here; use Steve Morse to match their “Validity: number is valid” line.
         </p>
         <div class="cfg-field">
@@ -358,15 +382,21 @@
         <div class="compliance-title">Last compliance run</div>
         <div id="complianceDnc" class="compliance-row idle">
           <span class="compliance-ico">·</span>
-          <div class="compliance-body"><span class="compliance-title">DNC list</span><span id="complianceDncText">—</span></div>
+          <div class="compliance-body"><span class="compliance-title">DNC list</span> <span id="complianceDncText">—</span></div>
         </div>
         <div id="complianceClean" class="compliance-row idle">
           <span class="compliance-ico">·</span>
-          <div class="compliance-body"><span class="compliance-title">Clean number</span><span id="complianceCleanText">—</span></div>
+          <div class="compliance-body"><span class="compliance-title">Clean number</span> <span id="complianceCleanText">—</span></div>
         </div>
         <div id="complianceCard" class="compliance-row idle">
           <span class="compliance-ico">·</span>
-          <div class="compliance-body"><span class="compliance-title">Card</span><span id="complianceCardText">—</span></div>
+          <div class="compliance-body"><span class="compliance-title">Card</span> <span id="complianceCardText">—</span></div>
+        </div>
+        <div id="cleanManualWrap" class="clean-manual-wrap" hidden>
+          <label for="chkCleanManualOk">
+            <input type="checkbox" id="chkCleanManualOk" autocomplete="off" />
+            <span>After CleanMyNumbers shows a <strong style="color: var(--text)">clean / qualified</strong> result for the phone above, tick this box. Leave it unticked if you saw <strong style="color: var(--text)">PHONE NUMBER IS NOT CLEAN</strong> or have not finished checking.</span>
+          </label>
         </div>
         <div class="file-row" style="margin-top: 0.5rem">
           <button type="button" class="btn-secondary" id="btnOpenDnc" hidden>Open DNC link</button>
@@ -1661,6 +1691,7 @@
     document.getElementById("cfgCleanUser").value = c.cleanUser;
     document.getElementById("cfgCleanPass").value = c.cleanPass;
     document.getElementById("cfgCardUrl").value = c.cardUrl;
+    syncCleanManualCheckboxForPhone("", c.cleanUrl);
   }
 
   function extractDncPhonesFromText(text) {
@@ -1703,6 +1734,23 @@
     if (ico) ico.textContent = state === "pass" ? "✓" : state === "fail" ? "✕" : state === "warn" ? "!" : "·";
   }
 
+  /** Reset CleanMyNumbers manual tick when the primary phone changes; show/hide the checkbox panel. */
+  function syncCleanManualCheckboxForPhone(phone10, cleanUrl) {
+    const wrap = document.getElementById("cleanManualWrap");
+    const chk = document.getElementById("chkCleanManualOk");
+    if (!wrap || !chk) return;
+    if (!phone10 || phone10.length !== 10 || !/cleanmynumbers\.com/i.test(String(cleanUrl || ""))) {
+      wrap.hidden = true;
+      return;
+    }
+    wrap.hidden = false;
+    const prev = chk.dataset.boundPhone || "";
+    if (prev !== phone10) {
+      chk.checked = false;
+      chk.dataset.boundPhone = phone10;
+    }
+  }
+
   async function checkDncAsync(phone10, url) {
     if (!url) return { state: "idle", text: "Not configured.", manual: false };
     if (!phone10 || phone10.length !== 10)
@@ -1737,24 +1785,22 @@
       try {
         await navigator.clipboard.writeText(phone10);
       } catch (_) {}
-      window.open(url, "_blank", "noopener,noreferrer");
-      const ok = confirm(
-        "Primary phone " +
-          phone10 +
-          " was copied and CleanMyNumbers should be open in a new tab.\n\n" +
-          "Log in (use saved email/password in settings if needed), paste or search the number, then validate.\n\n" +
-          "Click OK if the number is CLEAN / qualified.\n" +
-          "Click Cancel if you see PHONE NUMBER IS NOT CLEAN (Searched…) or you have not verified yet.",
-      );
-      if (!ok)
+      const chk = document.getElementById("chkCleanManualOk");
+      const alreadyOk = chk && chk.checked && chk.dataset.boundPhone === phone10;
+      if (!alreadyOk) {
+        window.open(url, "_blank", "noopener,noreferrer");
+      }
+      if (alreadyOk) {
         return {
-          state: "fail",
-          text: "CleanMyNumbers: not clean / not qualified, or not verified.",
+          state: "pass",
+          text: "CleanMyNumbers: confirmation ticked for this phone (clean / qualified).",
           manual: true,
         };
+      }
       return {
-        state: "pass",
-        text: "You confirmed clean / qualified on CleanMyNumbers.",
+        state: "warn",
+        text:
+          "CleanMyNumbers: phone copied and tab opened. After the site shows clean, tick the box under this panel and Run compliance checks again.",
         manual: true,
       };
     }
@@ -1835,6 +1881,7 @@
     const pan =
       data.payment_method === PAYMENT_BANK_CARD ? String(data.card_number || "").replace(/\D/g, "") : "";
 
+    syncCleanManualCheckboxForPhone(phone, cfg.cleanUrl);
     const dnc = await checkDncAsync(phone, cfg.dncUrl);
     const clean = await checkCleanAsync(phone, cfg.cleanUrl, cfg.cleanUser, cfg.cleanPass);
     const card = await checkCardAsync(pan, cfg.cardUrl);
