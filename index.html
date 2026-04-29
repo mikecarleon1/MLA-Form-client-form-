@@ -304,6 +304,7 @@
       width: 100%;
       margin-top: 0.65rem;
     }
+  </style>
 </head>
 <body>
   <div class="wrap">
@@ -320,30 +321,33 @@
       <details id="detailsComplianceCfg">
         <summary>Compliance URLs &amp; logins (saved only on this device)</summary>
         <p class="cfg-hint" style="margin-top: 0.45rem">
-          Your DNC / “clean number” hosts must allow this site in <strong>CORS</strong>, or the browser cannot read the response. If a check fails to load, use the manual link.
+          <strong>DNC:</strong> paste your Google Sheet <strong>edit</strong> link or the CSV export URL — the tool converts Sheets to CSV when possible.
+          <strong>CleanMyNumbers:</strong> the site cannot be read automatically from the browser; we copy the phone, open the tab, and you confirm the result.
+          <strong>Card:</strong> Luhn + public BIN run here; use Steve Morse to match their “Validity: number is valid” line.
         </p>
         <div class="cfg-field">
           <label for="cfgDncUrl">1 · DNC list URL</label>
-          <input type="url" id="cfgDncUrl" placeholder="https://example.com/dnc-list.txt" autocomplete="off" />
-          <div class="cfg-hint">Plain text or CSV: one 10-digit number per line (other digits on a line are ignored).</div>
+          <input type="url" id="cfgDncUrl" placeholder="Google Sheet or CSV URL" autocomplete="off" />
+          <div class="cfg-hint">Example: Google Sheets link with numbers in column A (updated daily is fine — we fetch the CSV export).</div>
         </div>
         <div class="cfg-field">
-          <label for="cfgCleanUrl">2 · Clean number check URL</label>
-          <input type="url" id="cfgCleanUrl" placeholder="https://api.example.com/lookup?phone={phone}" autocomplete="off" />
-          <div class="cfg-hint">Use <code>{phone}</code> where the 10-digit number should go (no spaces).</div>
+          <label for="cfgCleanUrl">2 · CleanMyNumbers</label>
+          <input type="url" id="cfgCleanUrl" placeholder="https://cleanmynumbers.com/clean-numbers" autocomplete="off" />
+          <div class="cfg-hint">Usually <code>https://cleanmynumbers.com/clean-numbers</code> — no <code>{phone}</code> token needed.</div>
         </div>
         <div class="cfg-field">
-          <label for="cfgCleanUser">Username (optional)</label>
+          <label for="cfgCleanUser">CleanMyNumbers email</label>
           <input type="text" id="cfgCleanUser" autocomplete="username" />
         </div>
         <div class="cfg-field">
-          <label for="cfgCleanPass">Password (optional)</label>
+          <label for="cfgCleanPass">CleanMyNumbers password</label>
           <input type="password" id="cfgCleanPass" autocomplete="current-password" />
+          <div class="cfg-hint">Stored only in this browser after you click Save (never sent to this GitHub page’s server).</div>
         </div>
         <div class="cfg-field">
-          <label for="cfgCardUrl">3 · Card check page (optional)</label>
-          <input type="url" id="cfgCardUrl" placeholder="Leave empty to use public BIN lookup + Luhn check" autocomplete="off" />
-          <div class="cfg-hint">If set, a button opens this URL. Card validity always includes a local Luhn check and <strong>lookup.binlist.net</strong> (first 8 digits, public).</div>
+          <label for="cfgCardUrl">3 · Card check (Steve Morse)</label>
+          <input type="url" id="cfgCardUrl" placeholder="https://stevemorse.org/ssn/cc.html" autocomplete="off" />
+          <div class="cfg-hint">Paste the card on that page — “Validity” should show <strong>number is valid</strong>. Luhn + BIN still run here first.</div>
         </div>
         <button type="button" class="btn-secondary" id="btnSaveComplianceCfg" style="margin-top: 0.75rem">Save compliance settings</button>
       </details>
@@ -1584,6 +1588,52 @@
     card: "mla_compliance_card_url",
   };
 
+  const COMPLIANCE_SEED_KEY = "mla_compliance_defaults_seeded_v4";
+  const DEFAULT_DNC_CSV =
+    "https://docs.google.com/spreadsheets/d/1tftqIjhDt7PLWPMT6OuXZU3Et2a-KGMNbKu7l7oRdSU/export?format=csv&gid=0";
+  const DEFAULT_CLEAN_URL = "https://cleanmynumbers.com/clean-numbers";
+  const DEFAULT_CLEAN_EMAIL = "litigator@gmail.com";
+  const DEFAULT_CARD_URL = "https://stevemorse.org/ssn/cc.html";
+
+  function seedComplianceDefaultsOnce() {
+    if (localStorage.getItem(COMPLIANCE_SEED_KEY)) return;
+    if (!localStorage.getItem(LS_COMPLIANCE.dnc)) localStorage.setItem(LS_COMPLIANCE.dnc, DEFAULT_DNC_CSV);
+    if (!localStorage.getItem(LS_COMPLIANCE.clean)) localStorage.setItem(LS_COMPLIANCE.clean, DEFAULT_CLEAN_URL);
+    if (!localStorage.getItem(LS_COMPLIANCE.cleanUser)) localStorage.setItem(LS_COMPLIANCE.cleanUser, DEFAULT_CLEAN_EMAIL);
+    if (!localStorage.getItem(LS_COMPLIANCE.card)) localStorage.setItem(LS_COMPLIANCE.card, DEFAULT_CARD_URL);
+    localStorage.setItem(COMPLIANCE_SEED_KEY, "1");
+  }
+
+  function parseGoogleSheetIdFromUrl(url) {
+    const m = String(url || "").match(/spreadsheets\/d\/([a-zA-Z0-9-_]+)/i);
+    return m ? m[1] : "";
+  }
+
+  function extractGidFromGoogleSheetUrl(url) {
+    const m = String(url || "").match(/[#?&]gid=(\d+)/i);
+    return m ? m[1] : "0";
+  }
+
+  /** Use CSV export so numbers can be fetched from the browser when Google allows CORS. */
+  function normalizeDncFetchUrl(url) {
+    const u = String(url || "").trim();
+    if (!u) return "";
+    if (/docs\.google\.com\/spreadsheets\/d\//i.test(u)) {
+      const id = parseGoogleSheetIdFromUrl(u);
+      if (!id) return u;
+      const gid = extractGidFromGoogleSheetUrl(u);
+      return "https://docs.google.com/spreadsheets/d/" + id + "/export?format=csv&gid=" + gid;
+    }
+    return u;
+  }
+
+  /** Human-friendly link for the “Open DNC” button. */
+  function dncUrlForOpenButton(url) {
+    const id = parseGoogleSheetIdFromUrl(url);
+    if (id) return "https://docs.google.com/spreadsheets/d/" + id + "/edit";
+    return String(url || "").trim();
+  }
+
   function loadComplianceCfg() {
     return {
       dncUrl: (localStorage.getItem(LS_COMPLIANCE.dnc) || "").trim(),
@@ -1604,6 +1654,7 @@
   }
 
   function initComplianceCfgInputs() {
+    seedComplianceDefaultsOnce();
     const c = loadComplianceCfg();
     document.getElementById("cfgDncUrl").value = c.dncUrl;
     document.getElementById("cfgCleanUrl").value = c.cleanUrl;
@@ -1614,10 +1665,16 @@
 
   function extractDncPhonesFromText(text) {
     const set = new Set();
-    const t = text || "";
-    let m;
-    const re = /\b(\d{10})\b/g;
-    while ((m = re.exec(t))) set.add(m[1]);
+    for (let line of (text || "").split(/\r?\n/)) {
+      line = line.replace(/^\uFEFF/, "").trim();
+      if (!line) continue;
+      if (/^dnc\s*call\s*list$/i.test(line)) continue;
+      const firstCell = line.split(/[,;\t]/)[0].replace(/[^\d]/g, "");
+      if (firstCell.length === 10) set.add(firstCell);
+      let m;
+      const re = /\b(\d{10})\b/g;
+      while ((m = re.exec(line))) set.add(m[1]);
+    }
     return set;
   }
 
@@ -1650,17 +1707,23 @@
     if (!url) return { state: "idle", text: "Not configured.", manual: false };
     if (!phone10 || phone10.length !== 10)
       return { state: "warn", text: "No 10-digit primary phone parsed from the note.", manual: false };
+    const fetchUrl = normalizeDncFetchUrl(url);
     try {
-      const r = await fetch(url, { method: "GET", mode: "cors" });
-      if (!r.ok) return { state: "warn", text: "Could not load list (HTTP " + r.status + "). Use Open DNC link.", manual: true };
+      const r = await fetch(fetchUrl || url, { method: "GET", mode: "cors" });
+      if (!r.ok)
+        return {
+          state: "warn",
+          text: "Could not load DNC data (HTTP " + r.status + "). Use Open DNC link.",
+          manual: true,
+        };
       const text = await r.text();
       if (extractDncPhonesFromText(text).has(phone10))
-        return { state: "fail", text: "This number appears on the loaded DNC list.", manual: true };
+        return { state: "fail", text: "This number appears on the DNC list (Google Sheet / CSV).", manual: true };
       return { state: "pass", text: "Not on the loaded DNC list.", manual: true };
     } catch (e) {
       return {
         state: "warn",
-        text: "Could not read the list from here (often CORS). Use Open DNC link to verify.",
+        text: "Could not read DNC from here (often Google CORS). Use Open DNC link to verify.",
         manual: true,
       };
     }
@@ -1669,7 +1732,32 @@
   async function checkCleanAsync(phone10, url, user, pass) {
     if (!url) return { state: "idle", text: "Not configured.", manual: false };
     if (!phone10 || phone10.length !== 10)
-      return { state: "warn", text: "No primary phone to send to your URL.", manual: false };
+      return { state: "warn", text: "No primary phone to check.", manual: false };
+    if (/cleanmynumbers\.com/i.test(url)) {
+      try {
+        await navigator.clipboard.writeText(phone10);
+      } catch (_) {}
+      window.open(url, "_blank", "noopener,noreferrer");
+      const ok = confirm(
+        "Primary phone " +
+          phone10 +
+          " was copied and CleanMyNumbers should be open in a new tab.\n\n" +
+          "Log in (use saved email/password in settings if needed), paste or search the number, then validate.\n\n" +
+          "Click OK if the number is CLEAN / qualified.\n" +
+          "Click Cancel if you see PHONE NUMBER IS NOT CLEAN (Searched…) or you have not verified yet.",
+      );
+      if (!ok)
+        return {
+          state: "fail",
+          text: "CleanMyNumbers: not clean / not qualified, or not verified.",
+          manual: true,
+        };
+      return {
+        state: "pass",
+        text: "You confirmed clean / qualified on CleanMyNumbers.",
+        manual: true,
+      };
+    }
     const built = url.replace(/\{phone\}/g, phone10);
     const headers = { Accept: "application/json, text/plain, */*" };
     if (user || pass) {
@@ -1730,7 +1818,12 @@
     }
     return {
       state: "pass",
-      text: "Luhn check passed." + binLine + (manualCardUrl ? " Use your card portal link if you need more." : ""),
+      text:
+        "Luhn passed (same structural idea as stevemorse.org). " +
+        binLine +
+        (manualCardUrl && /stevemorse\.org/i.test(manualCardUrl)
+          ? " On Steve Morse, “Validity” should show: number is valid."
+          : ""),
       manual: !!manualCardUrl,
     };
   }
@@ -1760,9 +1853,12 @@
     bD.hidden = !cfg.dncUrl;
     bC.hidden = !cfg.cleanUrl;
     bCard.hidden = !cfg.cardUrl;
-    bD.onclick = () => window.open(cfg.dncUrl, "_blank", "noopener,noreferrer");
-    bC.onclick = () => {
+    bD.onclick = () => window.open(dncUrlForOpenButton(cfg.dncUrl), "_blank", "noopener,noreferrer");
+    bC.onclick = async () => {
       if (!phone) return;
+      try {
+        await navigator.clipboard.writeText(phone);
+      } catch (_) {}
       window.open(cfg.cleanUrl.replace(/\{phone\}/g, phone), "_blank", "noopener,noreferrer");
     };
     bCard.onclick = () => window.open(cfg.cardUrl, "_blank", "noopener,noreferrer");
